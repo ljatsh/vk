@@ -1,0 +1,10 @@
+{
+  "name": "vk-triangle",
+  "version": "1.0.0",
+  "description": "Vulkan triangle tutorial project",
+  "dependencies": [
+    "glfw3",
+    "glm",
+    "stb"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug VulkanTriangle",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/VulkanTriangle.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "VULKAN_SDK",
+                    "value": "C:/VulkanSDK/1.3.xxx.0"
+                },
+                {
+                    "name": "PATH",
+                    "value": "${env:PATH};${workspaceFolder}/build/vcpkg_installed/x86-windows/bin"
+                }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "build-debug"
+        },
+        {
+            "name": "Debug VulkanTriangle (Release)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/Release/VulkanTriangle.exe",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                {
+                    "name": "VULKAN_SDK",
+                    "value": "C:/VulkanSDK/1.3.xxx.0"
+                },
+                {
+                    "name": "PATH",
+                    "value": "${env:PATH};${workspaceFolder}/build/vcpkg_installed/x86-windows/bin"
+                }
+            ],
+            "console": "integratedTerminal",
+            "preLaunchTask": "build-release"
+        }
+    ]
+}
