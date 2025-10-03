@@ -36,18 +36,67 @@ target_include_directories(VulkanTriangle PRIVATE src)
 
 # 设置编译定义
 target_compile_definitions(VulkanTriangle PRIVATE
-    VK_USE_PLATFORM_WIN32_KHR
     VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1
     VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
-    __INTELLISENSE__
 )
+
+# 设置构建类型
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
+
+# 调试标志配置
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # 在 Apple 平台上使用 -O1 而不是 -Od 以避免内联导致调试问题
+    if(APPLE)
+        set(CMAKE_CXX_FLAGS_DEBUG "-O1 -g")
+        set(CMAKE_C_FLAGS_DEBUG "-O1 -g")
+    else()
+        set(CMAKE_CXX_FLAGS_DEBUG "-Od -g")
+        set(CMAKE_C_FLAGS_DEBUG "-Od -g")
+    endif()
+    
+    # 添加调试定义
+    target_compile_definitions(VulkanTriangle PRIVATE
+        DEBUG_BUILD=1
+        _DEBUG
+    )
+else()
+    # Release 模式优化
+    if(APPLE)
+        set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+        set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
+    else()
+        set(CMAKE_CXX_FLAGS_RELEASE "-O2 -DNDEBUG")
+        set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+    endif()
+endif()
+
+# 平台特定的编译定义
+if(WIN32)
+    target_compile_definitions(VulkanTriangle PRIVATE
+        VK_USE_PLATFORM_WIN32_KHR
+    )
+elseif(APPLE)
+    target_compile_definitions(VulkanTriangle PRIVATE
+        VK_USE_PLATFORM_MACOS_MVK
+        __INTELLISENSE__
+    )
+elseif(UNIX)
+    target_compile_definitions(VulkanTriangle PRIVATE
+        VK_USE_PLATFORM_XLIB_KHR
+    )
+endif()
 
 # 查找 Slang 编译器
 find_program(SLANGC_EXECUTABLE slangc
     HINTS
         "C:/Program Files/Slang/bin"
         "C:/Slang/bin"
+        "/usr/local/bin"
+        "/opt/homebrew/bin"
         "$ENV{SLANG_ROOT}/bin"
+        "$ENV{HOME}/.local/bin"
     DOC "Slang compiler executable"
 )
 
