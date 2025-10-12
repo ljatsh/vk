@@ -250,3 +250,5 @@ export PATH=$VCPKG_ROOT:$PATH
 ## TODO
 - [GFXReconstruct](https://www.lunarg.com/mastering-gfxreconstuct-part-1/) - TODO
 - [Queue](https://docs.vulkan.org/guide/latest/queues.html) - Queue的概念和map
+- 创建transfer queue来传入staging buffer
+- [VulkanMemoryAllocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) - 对象的内存分配策略

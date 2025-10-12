@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <limits>
 #include <assert.h>
+#include <bitset>
 
 #ifdef __INTELLISENSE__
 #include <vulkan/vulkan_raii.hpp>
@@ -20,6 +21,7 @@ import vulkan_hpp;
 
 #define GLFW_INCLUDE_VULKAN // REQUIRED only for GLFW CreateWindowSurface.
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
 
 constexpr uint32_t WIDTH = 800;
 constexpr uint32_t HEIGHT = 600;
@@ -34,6 +36,33 @@ constexpr bool enableValidationLayers = false;
 #else
 constexpr bool enableValidationLayers = true;
 #endif
+
+struct Vertex {
+    glm::vec2 pos;
+    glm::vec3 color;
+
+    static vk::VertexInputBindingDescription getBindingDescription() {
+        return { 0, sizeof(Vertex), vk::VertexInputRate::eVertex };
+    }
+
+    static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions() {
+        return {
+            vk::VertexInputAttributeDescription{ 0, 0, vk::Format::eR32G32Sfloat, offsetof(Vertex, pos) },
+            vk::VertexInputAttributeDescription{ 1, 0, vk::Format::eR32G32B32Sfloat, offsetof(Vertex, color) }
+        };
+    }
+};
+
+const std::vector<Vertex> vertices = {
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
+};
 
 class HelloTriangleApplication {
 public:
@@ -62,6 +91,11 @@ private:
 
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
+
+    vk::raii::Buffer vertexBuffer = nullptr;
+    vk::raii::DeviceMemory vertexBufferMemory = nullptr;
+    vk::raii::Buffer indexBuffer = nullptr;
+    vk::raii::DeviceMemory indexBufferMemory = nullptr;
 
     vk::raii::CommandPool commandPool = nullptr;
     std::vector<vk::raii::CommandBuffer> commandBuffers;
@@ -118,6 +152,8 @@ private:
         createImageViews();
         createGraphicsPipeline();
         createCommandPool();
+        createVertexBuffer();
+        createIndexBuffer();
         createCommandBuffer();
         createSyncObjects();
     }
@@ -366,7 +402,10 @@ private:
         vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
         vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
 
-        vk::PipelineVertexInputStateCreateInfo vertexInputInfo;
+        auto bindingDescription = Vertex::getBindingDescription();
+        auto attributeDescriptions = Vertex::getAttributeDescriptions();
+        vk::PipelineVertexInputStateCreateInfo vertexInputInfo {  .vertexBindingDescriptionCount =1, .pVertexBindingDescriptions = &bindingDescription,
+            .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()), .pVertexAttributeDescriptions = attributeDescriptions.data() };
         vk::PipelineInputAssemblyStateCreateInfo inputAssembly{  .topology = vk::PrimitiveTopology::eTriangleList };
         vk::PipelineViewportStateCreateInfo viewportState{ .viewportCount = 1, .scissorCount = 1 };
 
@@ -410,6 +449,161 @@ private:
         commandPool = vk::raii::CommandPool(device, poolInfo);
     }
 
+    void createVertexBuffer() {
+        vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+        vk::raii::Buffer stagingBuffer({});
+        vk::raii::DeviceMemory stagingBufferMemory({});
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+
+        void* dataStaging = stagingBufferMemory.mapMemory(0, bufferSize);
+        memcpy(dataStaging, vertices.data(), bufferSize);
+        stagingBufferMemory.unmapMemory();
+
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, vertexBuffer, vertexBufferMemory);
+
+        copyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+    }
+
+    void createIndexBuffer() {
+        vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+        vk::raii::Buffer stagingBuffer({});
+        vk::raii::DeviceMemory stagingBufferMemory({});
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+
+        void* data = stagingBufferMemory.mapMemory(0, bufferSize);
+        memcpy(data, indices.data(), (size_t) bufferSize);
+        stagingBufferMemory.unmapMemory();
+
+        createBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, indexBuffer, indexBufferMemory);
+
+        copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+   }
+
+    void createBuffer(vk::DeviceSize size, vk::BufferUsageFlags usage, vk::MemoryPropertyFlags properties, vk::raii::Buffer& buffer, vk::raii::DeviceMemory& bufferMemory) {
+        vk::BufferCreateInfo bufferInfo{ .size = size, .usage = usage, .sharingMode = vk::SharingMode::eExclusive };
+        buffer = vk::raii::Buffer(device, bufferInfo);
+        vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
+        vk::MemoryAllocateInfo allocInfo{ .allocationSize =memRequirements.size, .memoryTypeIndex = findMemoryType(memRequirements.memoryTypeBits, properties) };
+        bufferMemory = vk::raii::DeviceMemory(device, allocInfo);
+        buffer.bindMemory(bufferMemory, 0);
+    }
+
+    void copyBuffer(vk::raii::Buffer & srcBuffer, vk::raii::Buffer & dstBuffer, vk::DeviceSize size) {
+        vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
+        vk::raii::CommandBuffer commandCopyBuffer = std::move(device.allocateCommandBuffers(allocInfo).front());
+        commandCopyBuffer.begin(vk::CommandBufferBeginInfo { .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+        commandCopyBuffer.copyBuffer(*srcBuffer, *dstBuffer, vk::BufferCopy{.srcOffset = 0, .dstOffset = 0, .size = size});
+        commandCopyBuffer.end();
+        queue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
+        queue.waitIdle();
+    }
+
+    std::string memoryPropertyFlagsToString(vk::MemoryPropertyFlags flags) {
+        std::vector<std::string> flagStrings;
+        
+        if (flags & vk::MemoryPropertyFlagBits::eDeviceLocal) {
+            flagStrings.push_back("DEVICE_LOCAL");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eHostVisible) {
+            flagStrings.push_back("HOST_VISIBLE");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eHostCoherent) {
+            flagStrings.push_back("HOST_COHERENT");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eHostCached) {
+            flagStrings.push_back("HOST_CACHED");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eLazilyAllocated) {
+            flagStrings.push_back("LAZILY_ALLOCATED");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eProtected) {
+            flagStrings.push_back("PROTECTED");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eDeviceCoherentAMD) {
+            flagStrings.push_back("DEVICE_COHERENT_AMD");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eDeviceUncachedAMD) {
+            flagStrings.push_back("DEVICE_UNCACHED_AMD");
+        }
+        if (flags & vk::MemoryPropertyFlagBits::eRdmaCapableNV) {
+            flagStrings.push_back("RDMA_CAPABLE_NV");
+        }
+        
+        if (flagStrings.empty()) {
+            return "NONE";
+        }
+        
+        std::string result;
+        for (size_t i = 0; i < flagStrings.size(); ++i) {
+            if (i > 0) result += " | ";
+            result += flagStrings[i];
+        }
+        return result;
+    }
+
+    uint32_t findMemoryType(uint32_t typeFilter, vk::MemoryPropertyFlags properties) {
+        vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
+        
+        std::cout << "\n=== 内存类型信息 ===" << std::endl;
+        std::cout << "物理设备支持的内存堆数量: " << memProperties.memoryHeapCount << std::endl;
+        std::cout << "物理设备支持的内存类型数量: " << memProperties.memoryTypeCount << std::endl;
+        std::cout << "请求的内存属性: " << memoryPropertyFlagsToString(properties) << std::endl;
+        std::cout << "类型过滤器 (二进制): " << std::bitset<32>(typeFilter) << std::endl;
+        
+        std::cout << "\n--- 内存堆信息 ---" << std::endl;
+        for (uint32_t i = 0; i < memProperties.memoryHeapCount; i++) {
+            std::cout << "堆 " << i << ": 大小=" << memProperties.memoryHeaps[i].size 
+                      << " 字节 (" << (memProperties.memoryHeaps[i].size / (1024 * 1024)) << " MB)";
+            if (memProperties.memoryHeaps[i].flags & vk::MemoryHeapFlagBits::eDeviceLocal) {
+                std::cout << " [设备本地]";
+            }
+            std::cout << std::endl;
+        }
+        
+        std::cout << "\n--- 内存类型信息 ---" << std::endl;
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+            bool isSupported = (typeFilter & (1 << i)) != 0;
+            bool hasRequiredProperties = (memProperties.memoryTypes[i].propertyFlags & properties) == properties;
+            
+            std::cout << "类型 " << i << ": 堆索引=" << memProperties.memoryTypes[i].heapIndex
+                      << ", 属性=" << memoryPropertyFlagsToString(memProperties.memoryTypes[i].propertyFlags);
+            
+            if (isSupported) {
+                std::cout << " [支持]";
+            } else {
+                std::cout << " [不支持]";
+            }
+            
+            if (hasRequiredProperties) {
+                std::cout << " [匹配要求]";
+            } else {
+                std::cout << " [不匹配要求]";
+            }
+            
+            std::cout << std::endl;
+        }
+
+        std::cout << "\n--- 搜索匹配的内存类型 ---" << std::endl;
+        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+            bool isSupported = (typeFilter & (1 << i)) != 0;
+            bool hasRequiredProperties = (memProperties.memoryTypes[i].propertyFlags & properties) == properties;
+            
+            if (isSupported && hasRequiredProperties) {
+                std::cout << "✓ 找到匹配的内存类型: " << i << std::endl;
+                std::cout << "  堆索引: " << memProperties.memoryTypes[i].heapIndex << std::endl;
+                std::cout << "  属性: " << memoryPropertyFlagsToString(memProperties.memoryTypes[i].propertyFlags) << std::endl;
+                std::cout << "  堆大小: " << memProperties.memoryHeaps[memProperties.memoryTypes[i].heapIndex].size 
+                          << " 字节 (" << (memProperties.memoryHeaps[memProperties.memoryTypes[i].heapIndex].size / (1024 * 1024)) << " MB)" << std::endl;
+                return i;
+            }
+        }
+
+        std::cout << "✗ 未找到匹配的内存类型!" << std::endl;
+        std::cout << "==================\n" << std::endl;
+        throw std::runtime_error("failed to find suitable memory type!");
+    }
+
     void createCommandBuffer() {
         vk::CommandBufferAllocateInfo allocInfo{ .commandPool = commandPool, .level = vk::CommandBufferLevel::ePrimary,
                                                  .commandBufferCount = MAX_FRAMES_IN_FLIGHT };
@@ -449,7 +643,9 @@ private:
         commandBuffers[currentFrame].setViewport(0, viewport);
         vk::Rect2D scissor = { .offset = { 0, 0 }, .extent = swapChainExtent };
         commandBuffers[currentFrame].setScissor( 0, scissor );
-        commandBuffers[currentFrame].draw(3, 1, 0, 0);
+        commandBuffers[currentFrame].bindVertexBuffers(0, *vertexBuffer, {0});
+        commandBuffers[currentFrame].bindIndexBuffer( *indexBuffer, 0, vk::IndexTypeValue<decltype(indices)::value_type>::value );
+        commandBuffers[currentFrame].drawIndexed(indices.size(), 1, 0, 0, 0);
         commandBuffers[currentFrame].endRendering();
         // After rendering, transition the swapchain image to PRESENT_SRC
         transition_image_layout(
