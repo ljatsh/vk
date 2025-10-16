@@ -152,3 +152,26 @@ endfunction()
 # 添加着色器编译目标
 add_slang_shader_target(compile_shaders)
 add_dependencies(VulkanTriangle compile_shaders)
+
+# 拷贝 textures 目录到构建目录
+set(TEXTURES_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/textures)
+set(TEXTURES_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/textures)
+
+# 创建构建目录
+file(MAKE_DIRECTORY ${TEXTURES_BUILD_DIR})
+
+# 添加自定义命令来拷贝 textures
+add_custom_command(
+    OUTPUT ${TEXTURES_BUILD_DIR}/.copied
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${TEXTURES_SOURCE_DIR} ${TEXTURES_BUILD_DIR}
+    COMMAND ${CMAKE_COMMAND} -E touch ${TEXTURES_BUILD_DIR}/.copied
+    DEPENDS ${TEXTURES_SOURCE_DIR}
+    COMMENT "Copying textures directory to build directory"
+    VERBATIM
+)
+
+# 添加自定义目标
+add_custom_target(copy_textures DEPENDS ${TEXTURES_BUILD_DIR}/.copied)
+
+# 让 VulkanTriangle 依赖于 copy_textures
+add_dependencies(VulkanTriangle copy_textures)
