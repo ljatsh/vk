@@ -175,3 +175,26 @@ add_custom_target(copy_textures DEPENDS ${TEXTURES_BUILD_DIR}/.copied)
 
 # 让 VulkanTriangle 依赖于 copy_textures
 add_dependencies(VulkanTriangle copy_textures)
+
+# 拷贝 models 目录到构建目录
+set(MODELS_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/models)
+set(MODELS_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/models)
+
+# 创建构建目录
+file(MAKE_DIRECTORY ${MODELS_BUILD_DIR})
+
+# 添加自定义命令来拷贝 models
+add_custom_command(
+    OUTPUT ${MODELS_BUILD_DIR}/.copied
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${MODELS_SOURCE_DIR} ${MODELS_BUILD_DIR}
+    COMMAND ${CMAKE_COMMAND} -E touch ${MODELS_BUILD_DIR}/.copied
+    DEPENDS ${MODELS_SOURCE_DIR}
+    COMMENT "Copying models directory to build directory"
+    VERBATIM
+)
+
+# 添加自定义目标
+add_custom_target(copy_models DEPENDS ${MODELS_BUILD_DIR}/.copied)
+
+# 让 VulkanTriangle 依赖于 copy_models
+add_dependencies(VulkanTriangle copy_models)

@@ -45,3 +45,4 @@ build/
 
 # cache directory
 .cache/
+.DS_Store
